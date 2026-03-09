@@ -1,0 +1,219 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Quotes · Natroxia{% endblock %}
+
+{% block nav_quotes %}active{% endblock %}
+
+{% block topbar %}
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-eyebrow"></span>
+      <span class="topbar-title">Quotation</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-add" type="button" onclick="document.getElementById('quote-form').scrollIntoView({ behavior: 'smooth' });">
+        <i class="fa-solid fa-calculator"></i> Get quotation
+      </button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="table-card" style="margin-bottom: 24px;">
+  <div class="table-header">
+    <h2>Get rates by date of birth</h2>
+    <p style="font-size: 0.88rem; color: #6b7280; margin-top: 4px;">Enter DOB and optional filters to see product rates for the matching age band.</p>
+  </div>
+  <form id="quote-form" style="padding: 20px 24px;">
+    {% csrf_token %}
+    <div class="form-row two">
+      <div class="field">
+        <label>Date of birth *</label>
+        <input type="date" id="qt-dob" name="dob" required />
+      </div>
+      <div class="field">
+        <label>Gender</label>
+        <select id="qt-gender" name="gender">
+          <option value="B">Both</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+        </select>
+        <small style="color: #6b7280;">Rate type: use Male/Female when rates differ by gender.</small>
+      </div>
+    </div>
+    <div class="form-row two" style="margin-top: 14px;">
+      <div class="field">
+        <label>Company</label>
+        <select id="qt-company" name="company_id">
+          <option value="">All companies</option>
+          {% for co in companies %}
+          <option value="{{ co.id }}">{{ co.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Product category</label>
+        <select id="qt-category" name="category">
+          <option value="">All categories</option>
+          {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-row two" style="margin-top: 14px;">
+      <div class="field">
+        <label>Plan(s)</label>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 6px;">
+          {% for pl in plans %}
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: 400; cursor: pointer;">
+            <input type="checkbox" name="plan_ids" value="{{ pl.id }}" class="qt-plan-cb" />
+            <span>{{ pl.name }}</span>
+          </label>
+          {% empty %}
+          <span style="color: #6b7280;">No plans</span>
+          {% endfor %}
+        </div>
+        <small style="color: #6b7280;">Tick one or more to filter (e.g. only GOLD). Leave all unchecked for all plans.</small>
+      </div>
+      <div class="field"></div>
+    </div>
+    <div style="margin-top: 20px;">
+      <button type="submit" class="btn-submit" id="qt-submit-btn">
+        <i class="fa-solid fa-search"></i> Get quotation
+      </button>
+    </div>
+  </form>
+</div>
+
+<div class="table-card" id="quote-results-card" style="display: none;">
+  <div class="table-header">
+    <h2 id="quote-results-title">Rates</h2>
+    <p style="font-size: 0.88rem; color: #6b7280; margin-top: 4px;" id="quote-results-meta"></p>
+  </div>
+  <div style="overflow-x: auto;">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Category</th>
+          <th>Company</th>
+          <th>Plan</th>
+          <th>Gender</th>
+          <th>Rate</th>
+        </tr>
+      </thead>
+      <tbody id="quote-results-body">
+      </tbody>
+    </table>
+  </div>
+  <div class="table-footer">
+    <span id="quote-results-count">0 records</span>
+  </div>
+</div>
+
+<div id="quote-empty-state" class="table-card" style="display: none; padding: 40px; text-align: center; color: #6b7280;">
+  <i class="fa-solid fa-info-circle" style="font-size: 2rem; margin-bottom: 12px; opacity: 0.6;"></i>
+  <p id="quote-empty-msg">Enter date of birth and click Get quotation.</p>
+</div>
+{% endblock %}
+
+{% block modals %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var form = document.getElementById('quote-form');
+  var resultsCard = document.getElementById('quote-results-card');
+  var emptyState = document.getElementById('quote-empty-state');
+  var resultsBody = document.getElementById('quote-results-body');
+  var resultsTitle = document.getElementById('quote-results-title');
+  var resultsMeta = document.getElementById('quote-results-meta');
+  var resultsCount = document.getElementById('quote-results-count');
+  var emptyMsg = document.getElementById('quote-empty-msg');
+  var submitBtn = document.getElementById('qt-submit-btn');
+
+  function showResults(show) {
+    resultsCard.style.display = show ? 'block' : 'none';
+    emptyState.style.display = show ? 'none' : 'block';
+  }
+
+  function setEmptyMessage(msg) {
+    emptyMsg.textContent = msg || 'Enter date of birth and click Get quotation.';
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var dob = document.getElementById('qt-dob').value;
+    var gender = document.getElementById('qt-gender').value || 'B';
+    var companyId = document.getElementById('qt-company').value;
+    var category = document.getElementById('qt-category').value;
+    var planIds = [];
+    document.querySelectorAll('.qt-plan-cb:checked').forEach(function(cb) { planIds.push(cb.value); });
+    if (!dob) {
+      if (typeof toast === 'function') toast('Please enter date of birth.', 'error');
+      return;
+    }
+    var params = new URLSearchParams();
+    params.set('dob', dob);
+    params.set('gender', gender);
+    if (companyId) params.set('company_id', companyId);
+    if (category) params.set('category', category);
+    planIds.forEach(function(id) { params.append('plan_ids', id); });
+    submitBtn.disabled = true;
+    fetch('/quotes/rates/?' + params.toString())
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        submitBtn.disabled = false;
+        if (data.ok) {
+          var age = data.age;
+          var band = data.age_band;
+          var results = data.results || [];
+          resultsTitle.textContent = 'Rates (age ' + age + ', band ' + (band ? band.label : '') + ')';
+          var genderLabel = { 'M': 'Male', 'F': 'Female', 'B': 'Both' }[data.gender] || data.gender || 'Both';
+          resultsMeta.textContent = 'Based on DOB → age ' + age + (band ? ' → ' + band.label : '') + ', ' + genderLabel + '. ' + (planIds.length ? 'Filtered by selected plan(s).' : '') + (companyId ? ' Filtered by company.' : '') + (category ? ' Filtered by category.' : '');
+          resultsBody.innerHTML = '';
+          results.forEach(function(r) {
+            var tr = document.createElement('tr');
+            var g = (r.gender && (r.gender === 'M' || r.gender === 'F')) ? (r.gender === 'M' ? 'Male' : 'Female') : 'Both';
+            tr.innerHTML = '<td class="primary">' + escapeHtml(r.product_name) + '</td><td>' + escapeHtml(r.category) + '</td><td>' + escapeHtml(r.company_name) + '</td><td>' + escapeHtml(r.plan_name) + '</td><td>' + g + '</td><td><strong>' + formatRate(r.rate) + '</strong></td>';
+            resultsBody.appendChild(tr);
+          });
+          resultsCount.textContent = results.length + ' record' + (results.length !== 1 ? 's' : '');
+          showResults(true);
+          if (results.length === 0) {
+            resultsMeta.textContent = (resultsMeta.textContent || '') + ' No rates found for this age band and filters. Try different filters or add prices for this age.';
+          }
+        } else {
+          setEmptyMessage(data.error || 'Could not load rates.');
+          showResults(false);
+          if (typeof toast === 'function') toast(data.error || 'Error', 'error');
+        }
+      })
+      .catch(function() {
+        submitBtn.disabled = false;
+        setEmptyMessage('Request failed. Try again.');
+        showResults(false);
+        if (typeof toast === 'function') toast('Request failed.', 'error');
+      });
+  });
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+  function formatRate(s) {
+    if (s == null) return '—';
+    var n = parseFloat(s);
+    if (isNaN(n)) return s;
+    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  setEmptyMessage('Enter date of birth and click Get quotation.');
+  emptyState.style.display = 'block';
+})();
+</script>
+{% endblock %}

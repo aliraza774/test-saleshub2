@@ -1,0 +1,220 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Dashboard · Natroxai{% endblock %}
+
+{% block nav_home %}active{% endblock %}
+
+{% block topbar %}
+  <div class="page-header">
+    <h1 class="page-greeting" id="page-greeting">Good evening!</h1>
+    <a class="help-link" href="#">
+      <span class="help-icon">?</span>
+      Help &amp; Feedback
+    </a>
+  </div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .info-banner {
+    background: #f4eef7;
+    border-radius: 16px; padding: 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; position: relative; overflow: hidden;
+  }
+  .info-banner::before {
+    content: '';
+    position: absolute;
+    right: -170px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 430px;
+    height: 430px;
+    border-radius: 50%;
+    background: #ffd1e4;
+  }
+  .info-banner-content { position: relative; z-index: 1; max-width: 500px; }
+  .info-banner h2 { font-size: 1.35rem; font-weight: 600; color: #1e3a8a; margin-bottom: 8px; }
+  .info-banner p { font-size: 0.88rem; color: #475569; line-height: 1.55; margin-bottom: 18px; }
+  .banner-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; border: none; border-radius: 8px;
+    background: #2563eb; color: #fff;
+    text-decoration: none;
+    font-family: var(--font-body); font-size: 0.85rem; font-weight: 400;
+    cursor: pointer; transition: background 0.18s, transform 0.18s;
+  }
+  .banner-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+  .banner-illustration { position: relative; z-index: 1; width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .banner-illustration i { font-size: 72px; color: rgba(30,58,138,0.18); }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  @media (max-width: 1100px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px)  { .stats-row { grid-template-columns: 1fr; } }
+
+  .stat-card {
+    background: #fff; border-radius: 14px; border: 1px solid #e5e7eb;
+    padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: transform 0.22s, box-shadow 0.22s; cursor: default;
+  }
+  .stat-card:hover { transform: translateY(-3px); box-shadow: 0 6px 24px rgba(0,0,0,0.08); }
+  .stat-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-bottom: 12px; background: #ffffff; color: #000000; border: 1px solid #e5e7eb; }
+  .stat-icon.blue,
+  .stat-icon.green,
+  .stat-icon.purple,
+  .stat-icon.amber { background: #ffffff; color: #000000; border: 1px solid #e5e7eb; }
+  .stat-value { font-size: 1.65rem; font-weight: 400; color: #111827; line-height: 1; margin-bottom: 4px; }
+  .stat-label { font-size: 0.78rem; color: #6b7280; font-weight: 400; }
+
+  .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  @media (max-width: 960px) { .cards-grid { grid-template-columns: 1fr; } }
+  .card { background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden; transition: box-shadow 0.25s; }
+  .card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.07); }
+  .card-head { padding: 18px 24px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; justify-content: space-between; }
+  .card-head h3 { font-size: 1rem; font-weight: 400; color: #111827; }
+  .card-body { padding: 20px 24px; }
+  .msg-card .card-body { padding: 24px; }
+  .msg-greeting { font-size: 1.08rem; font-weight: 400; color: #111827; margin-bottom: 14px; }
+  .msg-text { font-size: 0.875rem; color: #4b5563; line-height: 1.65; margin-bottom: 6px; }
+  .msg-from { display: flex; align-items: center; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid #f3f4f6; }
+  .msg-avatar { width: 38px; height: 38px; border-radius: 50%; background: #1e3a8a; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 400; flex-shrink: 0; }
+  .msg-name { font-size: 0.85rem; font-weight: 400; color: #374151; }
+  .help-grid { display: flex; flex-direction: column; gap: 8px; }
+  .help-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; background: #f9fafb; border-radius: 10px;
+    cursor: pointer; transition: background 0.18s;
+    text-decoration: none; color: #374151; font-size: 0.85rem; font-weight: 400;
+  }
+  .help-item:hover { background: #eff6ff; color: #1e3a8a; }
+  .help-item i.hi-icon { color: #9ca3af; font-size: 14px; width: 20px; text-align: center; transition: color 0.18s; }
+  .help-item:hover i.hi-icon { color: #2563eb; }
+  .help-item .arrow { margin-left: auto; font-size: 12px; color: #d1d5db; }
+  .help-item:hover .arrow { color: #2563eb; }
+</style>
+
+<!-- Verify-account banner (shown only when profile is incomplete) -->
+{% if not profile_complete %}
+<div class="info-banner">
+  <div class="info-banner-content">
+    <h2>Verify your account details</h2>
+    <p>Complete your profile by adding your age and gender in Settings to unlock your full account.</p>
+    <a href="{% url 'settings' %}" class="banner-btn">
+       Verify My Account
+    </a>
+  </div>
+  <div class="banner-illustration">
+    <i class="fa-solid fa-magnifying-glass-chart"></i>
+  </div>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-icon blue"><i class="fa-solid fa-building"></i></div>
+    <div class="stat-value">{{ companies_count|default:"0" }}</div>
+    <div class="stat-label">Companies</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green"><i class="fa-solid fa-box"></i></div>
+    <div class="stat-value">{{ products_count|default:"0" }}</div>
+    <div class="stat-label">Products</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+    <div class="stat-value">{{ quotes_count|default:"0" }}</div>
+    <div class="stat-label">Quotes</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon amber"><i class="fa-solid fa-dollar-sign"></i></div>
+    <div class="stat-value">${{ pipeline_value|default:"0" }}</div>
+    <div class="stat-label">Pipeline Value</div>
+  </div>
+</div>
+
+<!-- Cards -->
+<div class="cards-grid">
+  <div class="card msg-card">
+    <div class="card-body">
+      <div class="msg-greeting" id="welcome-name">Hey there!</div>
+      <p class="msg-text">Make sure you complete your onboarding as soon as possible to ensure that you're ready to start managing your pipeline and generating quotes through Natroxai.</p>
+      <p class="msg-text">If you've got any questions, please use the Help &amp; Feedback link above.</p>
+      <div class="msg-from">
+        <div class="msg-avatar">N.</div>
+        <span class="msg-name">Team Natroxai</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card help-card">
+    <div class="card-head"><h3>Get started</h3></div>
+    <div class="card-body">
+      <div class="help-grid">
+        <a class="help-item" href="{% url 'companies' %}">
+          <i class="fa-solid fa-building hi-icon"></i>
+          Add your first company
+          <i class="fa-solid fa-chevron-right arrow"></i>
+        </a>
+        <a class="help-item" href="{% url 'products' %}">
+          <i class="fa-solid fa-box hi-icon"></i>
+          Create a product listing
+          <i class="fa-solid fa-chevron-right arrow"></i>
+        </a>
+        <a class="help-item" href="{% url 'quotes' %}">
+          <i class="fa-solid fa-file-invoice-dollar hi-icon"></i>
+          Generate your first quote
+          <i class="fa-solid fa-chevron-right arrow"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent activity -->
+<div class="cards-grid">
+  <div class="card">
+    <div class="card-head"><h3>Recent Companies</h3></div>
+    <table class="data-table">
+      <thead><tr><th>Company</th><th>Industry</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for co in recent_companies %}
+        <tr>
+          <td class="primary">{{ co.name }}</td>
+          <td>{{ co.industry|default:"—" }}</td>
+          <td><span class="badge green">{{ co.get_status_display }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3">
+          <div class="empty-state" style="padding:30px;">
+            <i class="fa-regular fa-building"></i><p>No companies yet</p>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>Recent Quotes</h3></div>
+    <table class="data-table">
+      <thead><tr><th>Quote #</th><th>Company</th><th>Value</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for q in recent_quotes %}
+        <tr>
+          <td class="primary">#{{ q.id }}</td>
+          <td>{{ q.company }}</td>
+          <td>${{ q.total }}</td>
+          <td><span class="badge blue">{{ q.status }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4">
+          <div class="empty-state" style="padding:30px;">
+            <i class="fa-regular fa-file"></i><p>No quotes yet</p>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

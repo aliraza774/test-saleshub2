@@ -1,0 +1,18 @@
+2026-03-03
+- Initialized Python virtual environment and installed core backend dependencies.
+- Created Django project `core` inside `backend/`.
+- Added `requirements.txt` and `README.md` describing setup and usage.
+- Created `template.md` to codify quality, security, and prompting guidelines from `Overview.md`.
+- Switched database configuration to PostgreSQL with `.env` support and added JWT + CORS setup.
+- Created `accounts` app with a custom email-based `User` model including roles (ADMIN, AGENT, VIEWER, CUSTOMER, COMPANY) and status.
+- Implemented DRF serializers and views for:
+  - Customer sign-up (`POST /api/auth/signup/customer/`)
+  - Company sign-up (`POST /api/auth/signup/company/`)
+  - Login with JWT token response (`POST /api/auth/login/`)
+  - Authenticated landing endpoint (`GET /api/landing/`)
+- Updated `core` URLs to expose the new `/api/` routes.
+- Added Django template-served pages:
+  - `AuthPageView` at `/` serving `accounts/auth.html` (combined sign-in / sign-up form with animated overlay).
+  - `DashboardPageView` at `/dashboard/` serving `accounts/dashboard.html` (sidebar layout with dashboard widgets).
+- Created shared design-token stylesheet `accounts/static/accounts/theme.css` (blue × white theme, DM Sans, Font Awesome).
+- Updated `README.md`, `requirements.txt`, and `Tracked` to reflect current state of auth pages, dashboard, and dependency versions.

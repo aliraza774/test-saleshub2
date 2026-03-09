@@ -1,0 +1,181 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Companies · Natroxia{% endblock %}
+
+{% block nav_companies %}active{% endblock %}
+
+{% block topbar %}
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-eyebrow"></span>
+      <span class="topbar-title">Companies</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-add" onclick="openModal('company')">
+         Add Company
+      </button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="table-card">
+  <div class="table-header">
+    <h2>All Companies</h2>
+    <div class="table-search">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" placeholder="Search companies…" id="search-companies" oninput="filterTable('search-companies','companies-body')" />
+    </div>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>Industry</th>
+        <th>Contact</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="companies-body">
+      {% for co in companies %}
+      <tr>
+        <td class="primary">{{ co.name }}</td>
+        <td>{{ co.industry }}</td>
+        <td>{{ co.contact_name }}<br><small style="color:#9ca3af;">{{ co.contact_email }}</small></td>
+        <td>
+          {% if co.status == 'active' %}
+            <span class="badge green">Active</span>
+          {% elif co.status == 'prospect' %}
+            <span class="badge blue">Prospect</span>
+          {% else %}
+            <span class="badge gray">Inactive</span>
+          {% endif %}
+        </td>
+        <td>{{ co.created_at|date:"M d, Y" }}</td>
+        <td>
+          <div class="row-actions">
+            <button class="act-btn" title="Edit" data-id="{{ co.id }}" onclick="editCompany(this.dataset.id)"><i class="fa-solid fa-pen"></i></button>
+            <button class="act-btn delete" title="Delete" data-id="{{ co.id }}" onclick="deleteCompany(this.dataset.id)"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">
+            <i class="fa-regular fa-building"></i>
+            <p>No companies yet — add your first one!</p>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="table-footer">
+    <span>{{ companies|length }} record{{ companies|length|pluralize }}</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="modal-company">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-company-title">Add Company</h3>
+        <p>Fill in the company details below.</p>
+      </div>
+      <button class="modal-close" data-close="modal-company"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form method="POST" action="{% url 'company_save' %}">
+      {% csrf_token %}
+      <input type="hidden" id="co-id" name="id" value="{{ company_edit.id|default:'' }}" />
+      <div class="form-row">
+        <div class="field">
+          <label>Company Name *</label>
+          <input type="text" id="co-name" name="name" placeholder="e.g. Acme Corp" value="{{ company_edit.name|default:'' }}" required />
+        </div>
+      </div>
+      <div class="form-row two" style="margin-top:14px;">
+        <div class="field">
+          <label>Industry</label>
+          <select id="co-industry" name="industry">
+            <option value="">Select industry</option>
+            <option value="Technology" {% if company_edit.industry == 'Technology' %}selected{% endif %}>Technology</option>
+            <option value="Finance" {% if company_edit.industry == 'Finance' %}selected{% endif %}>Finance</option>
+            <option value="Healthcare" {% if company_edit.industry == 'Healthcare' %}selected{% endif %}>Healthcare</option>
+            <option value="Retail" {% if company_edit.industry == 'Retail' %}selected{% endif %}>Retail</option>
+            <option value="Manufacturing" {% if company_edit.industry == 'Manufacturing' %}selected{% endif %}>Manufacturing</option>
+            <option value="Education" {% if company_edit.industry == 'Education' %}selected{% endif %}>Education</option>
+            <option value="Insurance" {% if company_edit.industry == 'Insurance' %}selected{% endif %}>Insurance</option>
+            <option value="Other" {% if company_edit.industry == 'Other' %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="co-status" name="status">
+            <option value="active" {% if company_edit.status == 'active' %}selected{% endif %}>Active</option>
+            <option value="prospect" {% if company_edit.status == 'prospect' %}selected{% endif %}>Prospect</option>
+            <option value="inactive" {% if company_edit.status == 'inactive' %}selected{% endif %}>Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row two" style="margin-top:14px;">
+        <div class="field">
+          <label>Contact Name</label>
+          <input type="text" id="co-contact" name="contact_name" placeholder="Jane Smith" value="{{ company_edit.contact_name|default:'' }}" />
+        </div>
+        <div class="field">
+          <label>Contact Email</label>
+          <input type="email" id="co-email" name="contact_email" placeholder="jane@company.com" value="{{ company_edit.contact_email|default:'' }}" />
+        </div>
+      </div>
+      <div class="form-row two" style="margin-top:14px;">
+        <div class="field">
+          <label>TPA Name</label>
+          <input type="text" id="co-tpa" name="tpa_name" placeholder="e.g. Mednet" value="{{ company_edit.tpa_name|default:'' }}" />
+        </div>
+        <div class="field">
+          <label>Broker Commission %</label>
+          <input type="text" id="co-broker" name="broker_commission_pct" placeholder="e.g. 15.5" value="{{ company_edit.broker_commission_pct|default:'' }}" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" data-close="modal-company">Cancel</button>
+        <button type="submit" class="btn-submit">Save Company</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterTable(inputId, bodyId) {
+  const q = document.getElementById(inputId).value.toLowerCase();
+  document.querySelectorAll('#' + bodyId + ' tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function editCompany(id) {
+  window.location.href = '/companies/' + id + '/edit/';
+}
+function deleteCompany(id) {
+  if (confirm('Delete this company? This will remove all linked products and prices for this company.')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/companies/' + id + '/delete/';
+    const csrf = document.createElement('input');
+    csrf.name = 'csrfmiddlewaretoken'; csrf.value = '{{ csrf_token }}';
+    form.appendChild(csrf);
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+{% if company_edit %}
+document.addEventListener('DOMContentLoaded', function() { openModal('company'); });
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,657 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}{{ product.name }} · Product Description{% endblock %}
+
+{% block nav_products %}active{% endblock %}
+
+{% block topbar %}
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-eyebrow">Product Description</span>
+      <span class="topbar-title">{{ product.name }}</span>
+    </div>
+    <div class="topbar-right">
+      <a href="{% url 'products' %}" class="btn-add" style="text-decoration:none; display:flex; align-items:center;">Back to Products</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .detail-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 20px 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    margin-bottom: 20px;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .detail-item label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #6b7280;
+  }
+  .detail-item .val {
+    font-size: 0.9rem;
+    color: #111827;
+  }
+  .detail-desc {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #f3f4f6;
+  }
+  .detail-desc label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: #6b7280;
+  }
+  .detail-desc p {
+    margin-top: 6px;
+    font-size: 0.88rem;
+    color: #374151;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  .company-matrix-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    margin-bottom: 18px;
+    overflow: hidden;
+  }
+  .company-matrix-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .company-matrix-title {
+    font-size: 0.95rem;
+    color: #111827;
+    font-weight: 500;
+  }
+  .matrix-wrap {
+    padding: 14px 14px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rate-cell-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .rate-cell-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .rate-cell-item span {
+    font-size: 0.68rem;
+    color: #6b7280;
+    min-width: 10px;
+  }
+  .rate-cell-item input {
+    width: 72px;
+    max-width: 72px;
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 0.8rem;
+  }
+
+  .matrix-actions {
+    padding: 12px 14px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .add-ageband-btn {
+    border: none;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 10px;
+    padding: 7px 12px;
+    font-size: 0.76rem;
+    cursor: pointer;
+  }
+  .save-matrix-btn {
+    border: none;
+    background: #2563eb;
+    color: #fff;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .save-matrix-btn:disabled { opacity: 0.6; cursor: default; }
+
+  .mini-del-btn {
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  @media (max-width: 900px) {
+    .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="detail-card">
+  <div class="detail-grid">
+    <div class="detail-item">
+      <label>Name</label>
+      <div class="val">{{ product.name }}</div>
+    </div>
+    <div class="detail-item">
+      <label>Cat</label>
+      <div class="val">{{ product.category|default:"—" }}</div>
+    </div>
+    <div class="detail-item">
+      <label>Status</label>
+      <div class="val">{{ product.get_status_display }}</div>
+    </div>
+    <div class="detail-item">
+      <label>Linked Companies</label>
+      <div class="val">{{ linked_companies|length }}</div>
+    </div>
+  </div>
+  <div class="detail-desc">
+    <label>Descriptions</label>
+    <p>{{ product.description|default:"—" }}</p>
+  </div>
+</div>
+
+{% if linked_companies %}
+  {% for company in linked_companies %}
+  <div class="company-matrix-card company-matrix-section" data-product-id="{{ product.id }}" data-company-id="{{ company.id }}">
+    <div class="company-matrix-head">
+      <span class="company-matrix-title">Price Matrix — {{ company.name }}</span>
+      <span style="font-size:0.76rem; color:#6b7280;">M/F rates</span>
+    </div>
+
+    <form class="company-matrix-form" method="POST" action="{% url 'product_price_save' %}">
+      {% csrf_token %}
+      <input type="hidden" name="product_id" value="{{ product.id }}" />
+      <input type="hidden" name="company_id" value="{{ company.id }}" />
+
+      <div class="matrix-wrap">
+        <table class="data-table matrix-table" style="width:100%; min-width:0; table-layout:auto;">
+          <thead>
+            <tr class="matrix-header-row">
+              <th style="min-width:100px;">Age band</th>
+              <th data-add-plan-col="1" style="text-align:right; white-space:nowrap; min-width:120px;">
+                <button type="button" class="btn-add add-plan-btn" data-company-id="{{ company.id }}" data-product-id="{{ product.id }}" style="padding:6px 12px; font-size:0.75rem;">Add plan</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="2"><div class="empty-state" style="padding:18px 10px;">Loading matrix…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="matrix-actions">
+        <button type="button" class="add-ageband-btn" data-company-id="{{ company.id }}" data-product-id="{{ product.id }}">Add age band</button>
+        <button type="submit" class="save-matrix-btn">Save prices</button>
+      </div>
+    </form>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty-state" style="background:#fff; border:1px solid #e5e7eb; border-radius:14px;">
+    <i class="fa-solid fa-building"></i>
+    <p>This product is not linked to any company.</p>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="modal-ageband">
+  <div class="modal" style="max-width: 420px; width: min(420px, 92vw);">
+    <div class="modal-header">
+      <div>
+        <h3>Add age band</h3>
+        <p>Define the age range. Label will be auto-generated.</p>
+      </div>
+      <button class="modal-close" data-close="modal-ageband"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="form-add-ageband">
+      {% csrf_token %}
+      <div class="form-row two" style="margin-top:14px;">
+        <div class="field">
+          <label>Min age</label>
+          <input type="number" id="ageband-min-age" name="min_age" placeholder="e.g. 21" min="0" />
+        </div>
+        <div class="field">
+          <label>Max age *</label>
+          <input type="number" id="ageband-max-age" name="max_age" placeholder="e.g. 25" min="0" required />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" data-close="modal-ageband">Cancel</button>
+        <button type="submit" class="btn-submit">Save age band</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-plan">
+  <div class="modal" style="max-width: 420px; width: min(420px, 92vw);">
+    <div class="modal-header">
+      <div>
+        <h3>Add plan</h3>
+        <p>Create a new plan/network for this company product matrix.</p>
+      </div>
+      <button class="modal-close" data-close="modal-plan"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="form-add-plan">
+      {% csrf_token %}
+      <div class="form-row">
+        <div class="field">
+          <label>Plan code *</label>
+          <input type="text" id="plan-code" name="code" placeholder="e.g. GOLD_PLUS" required />
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:14px;">
+        <div class="field">
+          <label>Display name</label>
+          <input type="text" id="plan-name" name="name" placeholder="e.g. Gold Plus" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" data-close="modal-plan">Cancel</button>
+        <button type="submit" class="btn-submit">Save plan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-delete-confirm">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <div>
+        <h3 id="delete-confirm-title">Delete item</h3>
+        <p id="delete-confirm-message">Are you sure you want to delete this item?</p>
+      </div>
+      <button class="modal-close" data-close="modal-delete-confirm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" data-close="modal-delete-confirm">Cancel</button>
+      <button type="button" class="btn-submit" id="delete-confirm-btn" style="background:#dc2626;">Delete</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var activeScope = null;
+  var pendingDelete = null;
+
+  function setActiveScope(productId, companyId, sectionEl) {
+    activeScope = { productId: String(productId), companyId: String(companyId), sectionEl: sectionEl };
+  }
+
+  function openDeleteConfirm(title, message, onConfirm) {
+    document.getElementById('delete-confirm-title').textContent = title;
+    document.getElementById('delete-confirm-message').textContent = message;
+    pendingDelete = onConfirm;
+    openModal('delete-confirm');
+  }
+
+  var deleteConfirmBtn = document.getElementById('delete-confirm-btn');
+  if (deleteConfirmBtn) {
+    deleteConfirmBtn.addEventListener('click', function() {
+      if (typeof pendingDelete === 'function') pendingDelete();
+      pendingDelete = null;
+      closeModal('modal-delete-confirm');
+    });
+  }
+
+  function buildRateInput(planId, ageBandId, gender, value) {
+    var inp = document.createElement('input');
+    inp.type = 'number';
+    inp.name = 'rate_' + planId + '_' + ageBandId + '_' + gender;
+    inp.step = '0.01';
+    inp.min = '0';
+    inp.placeholder = '0';
+    inp.style.width = '72px';
+    inp.style.maxWidth = '72px';
+    inp.style.padding = '5px 6px';
+    if (value !== undefined && value !== null && value !== '') inp.value = value;
+    return inp;
+  }
+
+  function byCellRates(prices) {
+    var out = {};
+    (prices || []).forEach(function(p) {
+      var key = String(p.plan_id) + '_' + String(p.age_band_id);
+      out[key] = {
+        M: p.male_rate || '',
+        F: p.female_rate || ''
+      };
+    });
+    return out;
+  }
+
+  function renderSectionMatrix(sectionEl, plans, ageBands, prices) {
+    var table = sectionEl.querySelector('.matrix-table');
+    var headerRow = table.querySelector('.matrix-header-row');
+    var tbody = table.querySelector('tbody');
+
+    while (headerRow.children.length > 0) headerRow.removeChild(headerRow.lastChild);
+    var ageTh = document.createElement('th');
+    ageTh.style.minWidth = '100px';
+    ageTh.textContent = 'Age band';
+    headerRow.appendChild(ageTh);
+
+    (plans || []).forEach(function(plan) {
+      var th = document.createElement('th');
+      th.setAttribute('data-plan-id', plan.id);
+      th.style.minWidth = '128px';
+      var wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.justifyContent = 'space-between';
+      wrap.style.gap = '4px';
+      var label = document.createElement('span');
+      label.textContent = plan.name || plan.code || '';
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'mini-del-btn';
+      del.textContent = '×';
+      del.title = 'Delete plan';
+      del.addEventListener('click', function() {
+        openDeleteConfirm('Delete plan', 'This will remove this plan for this company matrix.', function() {
+          fetch('/products/plans/' + plan.id + '/delete/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+              product_id: sectionEl.dataset.productId,
+              company_id: sectionEl.dataset.companyId
+            })
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (!data.ok) {
+                toast(data.error || 'Could not delete plan.', 'error');
+                return;
+              }
+              loadSection(sectionEl);
+              toast('Plan deleted.');
+            })
+            .catch(function() { toast('Delete failed.', 'error'); });
+        });
+      });
+      wrap.appendChild(label);
+      wrap.appendChild(del);
+      th.appendChild(wrap);
+      headerRow.appendChild(th);
+    });
+
+    var addTh = document.createElement('th');
+    addTh.setAttribute('data-add-plan-col', '1');
+    addTh.style.textAlign = 'right';
+    addTh.style.whiteSpace = 'nowrap';
+    addTh.style.minWidth = '120px';
+    var addPlanBtn = document.createElement('button');
+    addPlanBtn.type = 'button';
+    addPlanBtn.className = 'btn-add';
+    addPlanBtn.style.padding = '6px 12px';
+    addPlanBtn.style.fontSize = '0.75rem';
+    addPlanBtn.textContent = 'Add plan';
+    addPlanBtn.addEventListener('click', function() {
+      setActiveScope(sectionEl.dataset.productId, sectionEl.dataset.companyId, sectionEl);
+      openModal('plan');
+    });
+    addTh.appendChild(addPlanBtn);
+    headerRow.appendChild(addTh);
+
+    tbody.innerHTML = '';
+    var cellRates = byCellRates(prices || []);
+
+    (ageBands || []).forEach(function(ageBand) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-age-band-id', ageBand.id);
+
+      var labelTd = document.createElement('td');
+      labelTd.className = 'primary';
+      labelTd.style.minWidth = '100px';
+      var wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.justifyContent = 'space-between';
+      wrap.style.gap = '4px';
+      var label = document.createElement('span');
+      label.textContent = ageBand.label || ageBand.code || '';
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'mini-del-btn';
+      del.textContent = '×';
+      del.title = 'Delete age band';
+      del.addEventListener('click', function() {
+        openDeleteConfirm('Delete age band', 'This will remove this age band for this company matrix.', function() {
+          fetch('/products/age-bands/' + ageBand.id + '/delete/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+              product_id: sectionEl.dataset.productId,
+              company_id: sectionEl.dataset.companyId
+            })
+          })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (!data.ok) {
+                toast(data.error || 'Could not delete age band.', 'error');
+                return;
+              }
+              loadSection(sectionEl);
+              toast('Age band deleted.');
+            })
+            .catch(function() { toast('Delete failed.', 'error'); });
+        });
+      });
+      wrap.appendChild(label);
+      wrap.appendChild(del);
+      labelTd.appendChild(wrap);
+      tr.appendChild(labelTd);
+
+      (plans || []).forEach(function(plan) {
+        var td = document.createElement('td');
+        td.style.minWidth = '128px';
+        var key = String(plan.id) + '_' + String(ageBand.id);
+        var maleRate = cellRates[key] ? cellRates[key].M : '';
+        var femaleRate = cellRates[key] ? cellRates[key].F : '';
+
+        var grid = document.createElement('div');
+        grid.className = 'rate-cell-grid';
+
+        var m = document.createElement('label');
+        m.className = 'rate-cell-item';
+        var mText = document.createElement('span');
+        mText.textContent = 'M';
+        m.appendChild(mText);
+        m.appendChild(buildRateInput(plan.id, ageBand.id, 'M', maleRate));
+
+        var f = document.createElement('label');
+        f.className = 'rate-cell-item';
+        var fText = document.createElement('span');
+        fText.textContent = 'F';
+        f.appendChild(fText);
+        f.appendChild(buildRateInput(plan.id, ageBand.id, 'F', femaleRate));
+
+        grid.appendChild(m);
+        grid.appendChild(f);
+        td.appendChild(grid);
+        tr.appendChild(td);
+      });
+
+      tbody.appendChild(tr);
+    });
+
+    var forms = sectionEl.querySelectorAll('.company-matrix-form');
+    forms.forEach(function(formEl) {
+      var addAgeBtn = sectionEl.querySelector('.add-ageband-btn');
+      if (addAgeBtn) {
+        addAgeBtn.onclick = function() {
+          setActiveScope(sectionEl.dataset.productId, sectionEl.dataset.companyId, sectionEl);
+          openModal('ageband');
+        };
+      }
+    });
+  }
+
+  function loadSection(sectionEl) {
+    var productId = sectionEl.dataset.productId;
+    var companyId = sectionEl.dataset.companyId;
+    fetch('/products/' + productId + '/prices/?company_id=' + encodeURIComponent(companyId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        renderSectionMatrix(sectionEl, data.plans || [], data.age_bands || [], data.prices || []);
+      })
+      .catch(function() {
+        var tbody = sectionEl.querySelector('tbody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="2"><div class="empty-state" style="padding:18px 10px;">Could not load matrix.</div></td></tr>';
+      });
+  }
+
+  document.querySelectorAll('.company-matrix-form').forEach(function(formEl) {
+    formEl.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var sectionEl = formEl.closest('.company-matrix-section');
+      var submitBtn = formEl.querySelector('.save-matrix-btn');
+      if (submitBtn) submitBtn.disabled = true;
+
+      fetch(formEl.getAttribute('action'), {
+        method: 'POST',
+        body: new FormData(formEl),
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCookie('csrftoken')
+        }
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok) {
+            toast(data.error || 'Save failed.', 'error');
+            return;
+          }
+          loadSection(sectionEl);
+          toast('Prices saved.');
+        })
+        .catch(function() { toast('Save failed.', 'error'); })
+        .finally(function() {
+          if (submitBtn) submitBtn.disabled = false;
+        });
+    });
+  });
+
+  var formAddAgeBand = document.getElementById('form-add-ageband');
+  if (formAddAgeBand) {
+    formAddAgeBand.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (!activeScope) {
+        toast('No matrix selected.', 'error');
+        return;
+      }
+      var payload = {
+        min_age: document.getElementById('ageband-min-age').value,
+        max_age: document.getElementById('ageband-max-age').value,
+        product_id: activeScope.productId,
+        company_id: activeScope.companyId,
+      };
+      fetch('/products/age-bands/create/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(payload)
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok) {
+            toast(data.error || 'Could not add age band.', 'error');
+            return;
+          }
+          formAddAgeBand.reset();
+          closeModal('modal-ageband');
+          loadSection(activeScope.sectionEl);
+          toast('Age band added.');
+        })
+        .catch(function() { toast('Could not add age band.', 'error'); });
+    });
+  }
+
+  var formAddPlan = document.getElementById('form-add-plan');
+  if (formAddPlan) {
+    formAddPlan.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (!activeScope) {
+        toast('No matrix selected.', 'error');
+        return;
+      }
+      var payload = {
+        code: document.getElementById('plan-code').value,
+        name: document.getElementById('plan-name').value,
+        product_id: activeScope.productId,
+        company_id: activeScope.companyId,
+      };
+      fetch('/products/plans/create/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(payload)
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok) {
+            toast(data.error || 'Could not add plan.', 'error');
+            return;
+          }
+          formAddPlan.reset();
+          closeModal('modal-plan');
+          loadSection(activeScope.sectionEl);
+          toast('Plan added.');
+        })
+        .catch(function() { toast('Could not add plan.', 'error'); });
+    });
+  }
+
+  document.querySelectorAll('.company-matrix-section').forEach(loadSection);
+})();
+</script>
+{% endblock %}

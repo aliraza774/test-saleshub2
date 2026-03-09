@@ -1,0 +1,1343 @@
+{% extends "accounts/base.html" %}
+
+{% block title %}Products · Natroxia{% endblock %}
+
+{% block nav_products %}active{% endblock %}
+
+{% block topbar %}
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-eyebrow"></span>
+      <span class="topbar-title">Products</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-add" type="button" onclick="openModal('import')" style="margin-right:8px;">
+        <i class="fa-solid fa-file-import"></i> Import from file
+      </button>
+      <button class="btn-add" onclick="openModal('product')">
+         Add Product
+      </button>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="table-card">
+  <div class="table-header">
+    <h2>Product Catalogue</h2>
+    <div class="table-search">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" placeholder="Search products…" id="search-products" oninput="filterTable('search-products','products-body')" />
+    </div>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Category</th>
+        <th>Linked companies</th>
+        <th>Prices</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="products-body">
+      {% for pr in products %}
+      <tr data-product-id="{{ pr.id }}" data-company-ids="{% for c in pr.companies.all %}{{ c.id }}{% if not forloop.last %},{% endif %}{% endfor %}">
+        <td class="primary">
+          <a href="{% url 'product_description' pk=pr.id %}" style="display:block; width:100%; color: inherit; text-decoration: none;">{{ pr.name }}</a>
+        </td>
+        <td>{{ pr.category|default:"—" }}</td>
+        <td>
+          {% for c in pr.companies.all %}
+            <span class="badge blue">{{ c.name }}</span>{% if not forloop.last %} {% endif %}
+          {% empty %}
+            —
+          {% endfor %}
+        </td>
+        <td>
+          {% if pr.price_count %}
+            <span title="{{ pr.price_count }} rate(s)">{{ pr.price_count }} rate{{ pr.price_count|pluralize }}</span>
+            {% if pr.min_rate is not None and pr.max_rate is not None %}
+              <br><small style="color:#6b7280;">{{ pr.min_rate|floatformat:0 }} – {{ pr.max_rate|floatformat:0 }}</small>
+            {% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if pr.status == 'available' %}
+            <span class="badge green">Available</span>
+          {% elif pr.status == 'limited' %}
+            <span class="badge orange">Limited</span>
+          {% else %}
+            <span class="badge gray">Out of Stock</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="row-actions">
+            <button class="act-btn" title="Manage prices" data-product-id="{{ pr.id }}" data-product-name="{{ pr.name|escapejs }}" onclick="openPriceModal(this)"><i class="fa-solid fa-tag"></i></button>
+            <button class="act-btn" title="Edit" data-id="{{ pr.id }}" onclick="editProduct(this.dataset.id)"><i class="fa-solid fa-pen"></i></button>
+            <button class="act-btn delete" title="Delete" data-id="{{ pr.id }}" onclick="deleteProduct(this.dataset.id)"><i class="fa-solid fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">
+            <i class="fa-solid fa-box"></i>
+            <p>No products yet — add a product and link it to your companies.</p>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="table-footer">
+    <span>{{ products|length }} record{{ products|length|pluralize }}</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<style>
+  .company-multi {
+    position: relative;
+    max-width: 520px;
+  }
+  .company-multi-trigger {
+    width: 100%;
+    text-align: left;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: #fff;
+    padding: 9px 12px;
+    font-size: 0.84rem;
+    color: #111827;
+    cursor: pointer;
+  }
+  .company-multi-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    padding: 10px;
+    display: none;
+  }
+  .company-multi-menu.open {
+    display: block;
+  }
+  .company-multi-search {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    margin-bottom: 8px;
+  }
+  .company-multi-list {
+    max-height: 170px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 2px;
+  }
+  .company-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.82rem;
+    color: #111827;
+    cursor: pointer;
+  }
+
+  .rate-cell-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+  .matrix-rate-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+  .matrix-rate-item {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 62px;
+  }
+  .matrix-rate-tag {
+    font-size: 0.64rem;
+    line-height: 1;
+    color: #6b7280;
+  }
+  .matrix-rate-box {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 5px 8px;
+    min-width: 62px;
+    text-align: center;
+    font-size: 0.78rem;
+    color: #111827;
+    background: #fff;
+  }
+  .rate-cell-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .rate-cell-item span {
+    font-size: 0.68rem;
+    color: #6b7280;
+    min-width: 10px;
+  }
+  .rate-cell-item input {
+    width: 74px;
+    min-width: 0;
+    max-width: 74px;
+    padding: 5px 6px;
+    font-size: 0.8rem;
+  }
+  .ageband-range-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 14px;
+  }
+  #modal-ageband .field input {
+    width: 100%;
+    min-width: 0;
+  }
+  #price-matrix-table th[data-add-plan-col] {
+    position: sticky;
+    right: 0;
+    background: #fff;
+    z-index: 4;
+  }
+  .matrix-age-row {
+    cursor: pointer;
+  }
+  .matrix-age-row:hover td {
+    background: #f9fafb;
+  }
+  .ageband-rates-grid {
+    margin-top: 12px;
+    max-height: 280px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .ageband-rates-row {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) auto auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .ageband-rates-plan {
+    font-size: 0.8rem;
+    color: #111827;
+    font-weight: 500;
+  }
+  .ageband-rate-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    color: #6b7280;
+  }
+  .ageband-rate-item input {
+    width: 84px;
+    max-width: 84px;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+  }
+  @media (max-width: 700px) {
+    .rate-cell-grid {
+      justify-content: flex-start;
+    }
+    .ageband-rates-row {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+  }
+  @media (max-width: 520px) {
+    .ageband-range-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<div class="modal-overlay" id="modal-product">
+  <div class="modal" style="max-width: 560px;">
+    <div class="modal-header">
+      <div>
+        <h3 id="modal-product-title">{% if product_edit %}Edit Product{% else %}Add Product{% endif %}</h3>
+        <p>Define the product and link it to companies. Price ranges are set per company in the price matrix.</p>
+      </div>
+      <button class="modal-close" data-close="modal-product"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form method="POST" action="{% url 'product_save' %}">
+      {% csrf_token %}
+      <input type="hidden" id="pr-id" name="id" value="{{ product_edit.id|default:'' }}" />
+      <div class="form-row">
+        <div class="field">
+          <label>Product Name *</label>
+          <input type="text" id="pr-name" name="name" placeholder="e.g. Health Plan Basic" value="{{ product_edit.name|default:'' }}" required />
+        </div>
+      </div>
+      <div class="form-row two" style="margin-top:14px;">
+        <div class="field">
+          <label>Category</label>
+          <select id="pr-category" name="category">
+            <option value="">Select category</option>
+            <option value="Insurance" {% if product_edit.category == 'Insurance' %}selected{% endif %}>Insurance</option>
+            <option value="Software" {% if product_edit.category == 'Software' %}selected{% endif %}>Software</option>
+            <option value="Hardware" {% if product_edit.category == 'Hardware' %}selected{% endif %}>Hardware</option>
+            <option value="Service" {% if product_edit.category == 'Service' %}selected{% endif %}>Service</option>
+            <option value="Subscription" {% if product_edit.category == 'Subscription' %}selected{% endif %}>Subscription</option>
+            <option value="Other" {% if product_edit.category == 'Other' %}selected{% endif %}>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="pr-status" name="status">
+            <option value="available" {% if product_edit.status == 'available' %}selected{% endif %}>Available</option>
+            <option value="limited" {% if product_edit.status == 'limited' %}selected{% endif %}>Limited</option>
+            <option value="out" {% if product_edit.status == 'out' %}selected{% endif %}>Out of Stock</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:14px;">
+        <div class="field">
+          <label>Link to companies</label>
+          <div class="company-multi" id="product-company-multi">
+            <button type="button" class="company-multi-trigger" id="company-multi-trigger">Select companies</button>
+            <div class="company-multi-menu" id="company-multi-menu">
+              <input type="text" class="company-multi-search" id="company-multi-search" placeholder="Search companies..." />
+              <div class="company-multi-list" id="company-multi-list">
+                {% for c in user_companies %}
+                <label class="company-option" data-company-name="{{ c.name|lower }}">
+                  <input type="checkbox" class="company-option-input" name="companies" value="{{ c.id }}" {% if product_edit and c in product_edit.companies.all %}checked{% endif %} />
+                  <span>{{ c.name }}</span>
+                </label>
+                {% empty %}
+                <span style="color:#6b7280; font-size:0.8rem;">No companies yet. <a href="{% url 'companies' %}">Add a company</a> first.</span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:14px;">
+        <div class="field">
+          <label>Description</label>
+          <textarea id="pr-desc" name="description" placeholder="Brief product description…">{{ product_edit.description|default:'' }}</textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" data-close="modal-product">Cancel</button>
+        <button type="submit" class="btn-submit">Save Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Price matrix modal: plan × age_band rates per company -->
+<div class="modal-overlay" id="modal-prices">
+  <div class="modal" style="max-width: 96vw; width: 900px;">
+    <div class="modal-header">
+      <div>
+        <h3>Price matrix — <span id="price-modal-product-name"></span></h3>
+        <p>Set gross rates by plan and age band for the selected company. Rates can vary by company.</p>
+      </div>
+      <button class="modal-close" data-close="modal-prices"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <input type="hidden" id="price-product-id" value="" />
+      <div class="field" style="margin-bottom: 16px;">
+        <label>Company</label>
+        <select id="price-company-id" required>
+          <option value="">Select company</option>
+        </select>
+      </div>
+      <div style="overflow-x: auto; max-height: 60vh; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+        <table class="data-table" id="price-matrix-table" style="width: 100%; min-width: 0; table-layout: auto;">
+          <thead>
+            <tr id="price-matrix-header-row">
+              <th style="min-width: 100px;">Age band</th>
+              {% for pl in plans %}
+              <th data-plan-id="{{ pl.id }}" style="min-width: 128px; position: relative;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                  <span>{{ pl.name }}</span>
+                  <button type="button" class="delete-plan-btn" style="padding: 0; font-size: 0.9rem; line-height: 1; color: #dc2626; border: none; background: transparent; cursor: pointer;" data-plan-id="{{ pl.id }}" title="Delete plan">×</button>
+                </div>
+              </th>
+              {% endfor %}
+              <th data-add-plan-col="1" style="text-align: right; white-space: nowrap; min-width: 120px;">
+                <button type="button" class="btn-add" style="padding: 6px 12px; font-size: 0.75rem;" onclick="openModal('plan')">
+                  Add plan
+                </button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ab in age_bands %}
+            <tr data-age-band-id="{{ ab.id }}">
+              <td class="primary" style="min-width: 100px; position: relative;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                  <span>{{ ab.label }}</span>
+                  <button type="button" class="delete-ageband-btn" style="padding: 0; font-size: 0.9rem; line-height: 1; color: #dc2626; border: none; background: transparent; cursor: pointer; flex-shrink: 0;" data-age-band-id="{{ ab.id }}" title="Delete age band">×</button>
+                </div>
+              </td>
+              {% for pl in plans %}
+              <td style="min-width: 128px;">
+                <div class="rate-cell-grid">
+                  <label class="rate-cell-item">
+                    <span>M</span>
+                    <input type="number" name="rate_{{ pl.id }}_{{ ab.id }}_M" step="0.01" min="0" placeholder="0" style="padding: 6px 8px;" />
+                  </label>
+                  <label class="rate-cell-item">
+                    <span>F</span>
+                    <input type="number" name="rate_{{ pl.id }}_{{ ab.id }}_F" step="0.01" min="0" placeholder="0" style="padding: 6px 8px;" />
+                  </label>
+                </div>
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+            <tr id="add-age-band-row">
+              <td colspan="{{ plans|length|add:'2' }}" style="text-align: center;">
+                <button type="button" class="btn-add" style="margin-top: 8px; padding: 6px 12px; font-size: 0.75rem;" onclick="openModal('ageband')">
+                  Add age band
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-submit" data-close="modal-prices">Done</button>
+      </div>
+  </div>
+</div>
+
+<!-- Import rates from PDF/Excel/CSV -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal" style="max-width: 520px;">
+    <div class="modal-header">
+      <div>
+        <h3>Import rates from file</h3>
+        <p>Select company and product, enter broker commission (optional), then upload a PDF, Excel (.xlsx), or CSV rate chart. Table data will be matched to plans and age bands.</p>
+      </div>
+      <button class="modal-close" data-close="modal-import"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="form-import-rates" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="field" style="margin-bottom:14px;">
+        <label>Company *</label>
+        <select name="company_id" id="import-company-id" required>
+          <option value="">Select company</option>
+          {% for c in user_companies %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label>Product *</label>
+        <select name="product_id" id="import-product-id" required>
+          <option value="">Select company first</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label>Broker commission % (optional)</label>
+        <input type="text" name="broker_commission" id="import-broker-commission" placeholder="e.g. 15.5" />
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label>File * (PDF, .xlsx, or CSV)</label>
+        <input type="file" name="file" id="import-file" accept=".pdf,.xlsx,.xls,.csv" required />
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" data-close="modal-import">Cancel</button>
+        <button type="submit" class="btn-submit" id="import-submit-btn">Import</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- Add age band -->
+<div class="modal-overlay" id="modal-ageband">
+  <div class="modal" style="max-width: 420px; width: min(420px, 92vw);">
+    <div class="modal-header">
+      <div>
+        <h3 id="ageband-modal-title">Add age band</h3>
+        <p id="ageband-modal-desc">Define the age range and set M/F rates for available plans.</p>
+      </div>
+      <button class="modal-close" data-close="modal-ageband"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="form-add-ageband">
+      {% csrf_token %}
+      <input type="hidden" id="ageband-edit-id" value="" />
+      <div class="ageband-range-row">
+        <div class="field">
+          <label>Min age</label>
+          <input type="number" id="ageband-min-age" name="min_age" placeholder="e.g. 21" min="0" />
+        </div>
+        <div class="field">
+          <label>Max age *</label>
+          <input type="number" id="ageband-max-age" name="max_age" placeholder="e.g. 25" min="0" required />
+        </div>
+      </div>
+      <div id="ageband-rates" class="ageband-rates-grid"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" data-close="modal-ageband">Cancel</button>
+        <button type="submit" class="btn-submit" id="ageband-save-btn">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add plan -->
+<div class="modal-overlay" id="modal-plan">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <div>
+        <h3>Add plan</h3>
+        <p>Create a new plan / network that can be used in the price matrix.</p>
+      </div>
+      <button class="modal-close" data-close="modal-plan"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="form-add-plan">
+      {% csrf_token %}
+      <div class="form-row">
+        <div class="field">
+          <label>Plan code *</label>
+          <input type="text" id="plan-code" name="code" placeholder="e.g. GOLD_PLUS" required />
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:14px;">
+        <div class="field">
+          <label>Display name</label>
+          <input type="text" id="plan-name" name="name" placeholder="e.g. Gold Plus" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" data-close="modal-plan">Cancel</button>
+        <button type="submit" class="btn-submit">Save plan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-delete-confirm">
+  <div class="modal" style="max-width: 420px;">
+    <div class="modal-header">
+      <div>
+        <h3 id="delete-confirm-title">Delete item</h3>
+        <p id="delete-confirm-message">Are you sure you want to delete this item?</p>
+      </div>
+      <button class="modal-close" data-close="modal-delete-confirm"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" data-close="modal-delete-confirm">Cancel</button>
+      <button type="button" class="btn-submit" id="delete-confirm-btn" style="background:#dc2626;">Delete</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ user_companies_list|json_script:"user-companies-data" }}
+{{ products_for_import|json_script:"products-for-import-data" }}
+<script type="application/json" id="page-config-json">{"openProductEdit":{% if product_edit %}true{% else %}false{% endif %}}</script>
+<script id="products-page-js">
+(function() {
+  var userCompaniesEl = document.getElementById('user-companies-data');
+  var userCompanies = userCompaniesEl ? JSON.parse(userCompaniesEl.textContent) : [];
+  var productsForImportEl = document.getElementById('products-for-import-data');
+  var productsForImport = productsForImportEl ? JSON.parse(productsForImportEl.textContent) : [];
+  var pendingDelete = null;
+  var currentMatrix = { plans: [], ageBands: [], pricesByCell: {} };
+
+  function csrfToken() {
+    if (typeof getCookie === 'function') return getCookie('csrftoken');
+    var el = document.querySelector('[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+  }
+
+  function getCurrentProductAndCompany() {
+    return {
+      productId: document.getElementById('price-product-id').value,
+      companyId: document.getElementById('price-company-id').value,
+    };
+  }
+
+  function openDeleteConfirm(title, message, onConfirm) {
+    document.getElementById('delete-confirm-title').textContent = title;
+    document.getElementById('delete-confirm-message').textContent = message;
+    pendingDelete = onConfirm;
+    openModal('delete-confirm');
+  }
+
+  var deleteConfirmBtn = document.getElementById('delete-confirm-btn');
+  if (deleteConfirmBtn) {
+    deleteConfirmBtn.addEventListener('click', function() {
+      if (typeof pendingDelete === 'function') pendingDelete();
+      pendingDelete = null;
+      closeModal('modal-delete-confirm');
+    });
+  }
+
+  function filterTable(inputId, bodyId) {
+    var q = document.getElementById(inputId).value.toLowerCase();
+    document.querySelectorAll('#' + bodyId + ' tr').forEach(function(row) {
+      row.style.display = row.textContent.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+    });
+  }
+  window.filterTable = filterTable;
+
+  function initCompanyMultiSelect() {
+    var trigger = document.getElementById('company-multi-trigger');
+    var menu = document.getElementById('company-multi-menu');
+    var search = document.getElementById('company-multi-search');
+    var list = document.getElementById('company-multi-list');
+    if (!trigger || !menu || !list) return;
+
+    function updateTriggerLabel() {
+      var checked = list.querySelectorAll('.company-option-input:checked');
+      if (!checked.length) {
+        trigger.textContent = 'Select companies';
+        return;
+      }
+      if (checked.length === 1) {
+        var span = checked[0].closest('.company-option').querySelector('span');
+        trigger.textContent = span ? span.textContent : '1 company selected';
+        return;
+      }
+      trigger.textContent = checked.length + ' companies selected';
+    }
+
+    trigger.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      menu.classList.toggle('open');
+      if (menu.classList.contains('open') && search) search.focus();
+    });
+
+    list.querySelectorAll('.company-option-input').forEach(function(cb) {
+      cb.addEventListener('change', updateTriggerLabel);
+    });
+
+    if (search) {
+      search.addEventListener('input', function() {
+        var q = this.value.trim().toLowerCase();
+        list.querySelectorAll('.company-option').forEach(function(item) {
+          var name = item.getAttribute('data-company-name') || '';
+          item.style.display = name.indexOf(q) !== -1 ? '' : 'none';
+        });
+      });
+    }
+
+    document.addEventListener('click', function(e) {
+      if (!menu.classList.contains('open')) return;
+      var root = document.getElementById('product-company-multi');
+      if (!root || root.contains(e.target)) return;
+      menu.classList.remove('open');
+    });
+
+    updateTriggerLabel();
+  }
+
+  initCompanyMultiSelect();
+
+  function editProduct(id) {
+    window.location.href = '/products/' + id + '/edit/';
+  }
+  window.editProduct = editProduct;
+  function deleteProduct(id) {
+    if (confirm('Delete this product? This will remove all price data for this product.')) {
+      var form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/products/' + id + '/delete/';
+      var csrf = document.createElement('input');
+      csrf.name = 'csrfmiddlewaretoken';
+      csrf.value = document.querySelector('[name=csrfmiddlewaretoken]') && document.querySelector('[name=csrfmiddlewaretoken]').value || '';
+      form.appendChild(csrf);
+      document.body.appendChild(form);
+      form.submit();
+    }
+  }
+  window.deleteProduct = deleteProduct;
+  function openPriceModal(btn) {
+    var productId = btn.getAttribute('data-product-id');
+    var productName = btn.getAttribute('data-product-name') || '';
+    document.getElementById('price-product-id').value = productId;
+    document.getElementById('price-modal-product-name').textContent = productName;
+    var row = document.querySelector('tr[data-product-id="' + productId + '"]');
+    var companyIds = row ? (row.getAttribute('data-company-ids') || '').split(',').filter(Boolean) : [];
+    var sel = document.getElementById('price-company-id');
+    sel.innerHTML = '<option value="">Select company</option>';
+    userCompanies.forEach(function(c) {
+      if (companyIds.indexOf(String(c.id)) !== -1) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        sel.appendChild(opt);
+      }
+    });
+    if (sel.options.length === 1 && companyIds.length === 1) sel.selectedIndex = 1;
+    if (sel.value) {
+      loadPricesForCompany(productId, sel.value);
+    } else {
+      setMatrixData({ plans: [], age_bands: [], prices: [] });
+      renderScopedMatrix();
+    }
+    openModal('prices');
+  }
+  window.openPriceModal = openPriceModal;
+  var priceCompanyEl = document.getElementById('price-company-id');
+  if (priceCompanyEl) {
+    priceCompanyEl.addEventListener('change', function() {
+      var pid = document.getElementById('price-product-id').value;
+      if (pid) loadPricesForCompany(pid, this.value);
+    });
+  }
+  function loadPricesForCompany(productId, companyId) {
+    if (!companyId) {
+      setMatrixData({ plans: [], age_bands: [], prices: [] });
+      renderScopedMatrix();
+      return Promise.resolve();
+    }
+    return fetch('/products/' + productId + '/prices/?company_id=' + encodeURIComponent(companyId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        setMatrixData(data);
+        renderScopedMatrix();
+      })
+      .catch(function() {
+        setMatrixData({ plans: [], age_bands: [], prices: [] });
+        renderScopedMatrix();
+      });
+  }
+
+  function setMatrixData(data) {
+    currentMatrix.plans = data.plans || [];
+    currentMatrix.ageBands = data.age_bands || [];
+    currentMatrix.pricesByCell = {};
+    (data.prices || []).forEach(function(p) {
+      var key = String(p.plan_id) + '_' + String(p.age_band_id);
+      currentMatrix.pricesByCell[key] = {
+        M: p.male_rate || '',
+        F: p.female_rate || ''
+      };
+    });
+  }
+
+  function getCellRates(planId, ageBandId) {
+    var key = String(planId) + '_' + String(ageBandId);
+    return currentMatrix.pricesByCell[key] || { M: '', F: '' };
+  }
+
+  function findAgeBand(ageBandId) {
+    var match = null;
+    currentMatrix.ageBands.forEach(function(ab) {
+      if (String(ab.id) === String(ageBandId)) match = ab;
+    });
+    return match;
+  }
+  var pageConfigEl = document.getElementById('page-config-json');
+  if (pageConfigEl) {
+    var pageConfig = JSON.parse(pageConfigEl.textContent);
+    if (pageConfig.openProductEdit) {
+      document.addEventListener('DOMContentLoaded', function() {
+        openModal('product');
+        if (window.location.pathname.indexOf('/products/') === 0 && window.location.pathname.indexOf('/edit/') !== -1) {
+          window.history.replaceState({}, '', '/products/');
+        }
+      });
+    }
+  }
+
+  function refreshImportProducts() {
+    var companyId = document.getElementById('import-company-id').value;
+    var sel = document.getElementById('import-product-id');
+    var fileInput = document.getElementById('import-file');
+    sel.innerHTML = '<option value="">Select product</option>';
+    if (fileInput) fileInput.value = '';
+    if (!companyId) return;
+    // Company IDs are UUIDs (strings), not integers
+    productsForImport.forEach(function(p) {
+      var ids = (p.company_ids || []).map(function(id) { return String(id); });
+      if (ids.indexOf(String(companyId)) !== -1) {
+        var opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+      }
+    });
+  }
+  window.refreshImportProducts = refreshImportProducts;
+  var importCompanyEl = document.getElementById('import-company-id');
+  if (importCompanyEl) importCompanyEl.addEventListener('change', refreshImportProducts);
+  // When opening the import modal, refresh products for the currently selected company
+  var origOpenModal = window.openModal;
+  if (typeof origOpenModal === 'function') {
+    window.openModal = function(type) {
+      origOpenModal(type);
+      if (type === 'import') refreshImportProducts();
+    };
+  }
+
+  var formImport = document.getElementById('form-import-rates');
+  if (formImport) {
+    formImport.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var btn = document.getElementById('import-submit-btn');
+      var fileInput = document.getElementById('import-file');
+      if (!fileInput || !fileInput.files.length) {
+        if (typeof toast === 'function') toast('Please select a file.', 'error');
+        return;
+      }
+      var fd = new FormData(formImport);
+      btn.disabled = true;
+      fetch('/products/import/upload/', {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value }
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.disabled = false;
+          if (data.ok) {
+            if (typeof toast === 'function') toast('Imported ' + data.imported + ' rate(s).');
+            if (data.errors && data.errors.length) console.warn('Import warnings:', data.errors);
+            closeModal('modal-import');
+            formImport.reset();
+            refreshImportProducts();
+            window.location.reload();
+          } else {
+            if (typeof toast === 'function') toast(data.error || 'Import failed.', 'error');
+          }
+        })
+        .catch(function(err) {
+          btn.disabled = false;
+          if (typeof toast === 'function') toast('Import failed.', 'error');
+        });
+    });
+  }
+
+  function refreshAddAgeBandRowColspan() {
+    var addRow = document.getElementById('add-age-band-row');
+    if (!addRow) return;
+    var cell = addRow.querySelector('td');
+    if (!cell) return;
+    var planCount = document.querySelectorAll('#modal-prices thead th[data-plan-id]').length;
+    cell.colSpan = planCount + 2;
+  }
+
+  function renderScopedMatrix() {
+    var headerRow = document.getElementById('price-matrix-header-row');
+    var tbody = document.querySelector('#price-matrix-table tbody');
+    if (!headerRow || !tbody) return;
+
+    var plans = currentMatrix.plans || [];
+    var ageBands = currentMatrix.ageBands || [];
+
+    while (headerRow.children.length > 0) headerRow.removeChild(headerRow.lastChild);
+    var ageTh = document.createElement('th');
+    ageTh.style.minWidth = '100px';
+    ageTh.textContent = 'Age band';
+    headerRow.appendChild(ageTh);
+
+    (plans || []).forEach(function(plan) {
+      var th = document.createElement('th');
+      th.setAttribute('data-plan-id', plan.id);
+      th.style.minWidth = '128px';
+      var wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.justifyContent = 'space-between';
+      wrap.style.gap = '4px';
+
+      var span = document.createElement('span');
+      span.textContent = plan.name || plan.code || '';
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'delete-plan-btn';
+      del.setAttribute('data-plan-id', plan.id);
+      del.style.padding = '0';
+      del.style.fontSize = '0.9rem';
+      del.style.lineHeight = '1';
+      del.style.color = '#dc2626';
+      del.style.border = 'none';
+      del.style.background = 'transparent';
+      del.style.cursor = 'pointer';
+      del.textContent = '×';
+      del.title = 'Delete plan';
+      del.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        attachPlanDeleteListener(plan.id)();
+      });
+      wrap.appendChild(span);
+      wrap.appendChild(del);
+      th.appendChild(wrap);
+      headerRow.appendChild(th);
+    });
+
+    var addTh = document.createElement('th');
+    addTh.setAttribute('data-add-plan-col', '1');
+    addTh.style.textAlign = 'right';
+    addTh.style.whiteSpace = 'nowrap';
+    addTh.style.minWidth = '120px';
+    var addPlanBtn = document.createElement('button');
+    addPlanBtn.type = 'button';
+    addPlanBtn.className = 'btn-add';
+    addPlanBtn.style.padding = '6px 12px';
+    addPlanBtn.style.fontSize = '0.75rem';
+    addPlanBtn.textContent = 'Add plan';
+    addPlanBtn.addEventListener('click', function() {
+      var scope = getCurrentProductAndCompany();
+      if (!scope.productId || !scope.companyId) {
+        if (typeof toast === 'function') toast('Select a company first.', 'error');
+        return;
+      }
+      openModal('plan');
+    });
+    addTh.appendChild(addPlanBtn);
+    headerRow.appendChild(addTh);
+
+    tbody.innerHTML = '';
+
+    (ageBands || []).forEach(function(ageBand) {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-age-band-id', ageBand.id);
+      tr.className = 'matrix-age-row';
+      var labelTd = document.createElement('td');
+      labelTd.className = 'primary';
+      labelTd.style.minWidth = '100px';
+      var wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.justifyContent = 'space-between';
+      wrap.style.gap = '4px';
+      var span = document.createElement('span');
+      span.textContent = ageBand.label || ageBand.code || '';
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'delete-ageband-btn';
+      del.setAttribute('data-age-band-id', ageBand.id);
+      del.style.padding = '0';
+      del.style.fontSize = '0.9rem';
+      del.style.lineHeight = '1';
+      del.style.color = '#dc2626';
+      del.style.border = 'none';
+      del.style.background = 'transparent';
+      del.style.cursor = 'pointer';
+      del.style.flexShrink = '0';
+      del.textContent = '×';
+      del.title = 'Delete age band';
+      del.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        attachAgeBandDeleteListener(ageBand.id)();
+      });
+      wrap.appendChild(span);
+      wrap.appendChild(del);
+      labelTd.appendChild(wrap);
+      tr.appendChild(labelTd);
+
+      (plans || []).forEach(function(plan) {
+        var td = document.createElement('td');
+        td.style.minWidth = '128px';
+        var rates = getCellRates(plan.id, ageBand.id);
+
+        var cellGrid = document.createElement('div');
+        cellGrid.className = 'matrix-rate-grid';
+
+        var m = document.createElement('div');
+        m.className = 'matrix-rate-item';
+        var mTag = document.createElement('span');
+        mTag.className = 'matrix-rate-tag';
+        mTag.textContent = 'M';
+        var mBox = document.createElement('div');
+        mBox.className = 'matrix-rate-box';
+        mBox.textContent = rates.M || '—';
+        m.appendChild(mTag);
+        m.appendChild(mBox);
+
+        var f = document.createElement('div');
+        f.className = 'matrix-rate-item';
+        var fTag = document.createElement('span');
+        fTag.className = 'matrix-rate-tag';
+        fTag.textContent = 'F';
+        var fBox = document.createElement('div');
+        fBox.className = 'matrix-rate-box';
+        fBox.textContent = rates.F || '—';
+        f.appendChild(fTag);
+        f.appendChild(fBox);
+
+        cellGrid.appendChild(m);
+        cellGrid.appendChild(f);
+        td.appendChild(cellGrid);
+        tr.appendChild(td);
+      });
+
+      tr.addEventListener('click', function(e) {
+        if (e.target.closest('button')) return;
+        openAgeBandModal({ mode: 'edit', ageBandId: ageBand.id });
+      });
+
+      tbody.appendChild(tr);
+    });
+
+    var addRow = document.createElement('tr');
+    addRow.id = 'add-age-band-row';
+    var addTd = document.createElement('td');
+    addTd.style.textAlign = 'center';
+    var addAgeBtn = document.createElement('button');
+    addAgeBtn.type = 'button';
+    addAgeBtn.className = 'btn-add';
+    addAgeBtn.style.marginTop = '8px';
+    addAgeBtn.style.padding = '6px 12px';
+    addAgeBtn.style.fontSize = '0.75rem';
+    addAgeBtn.textContent = 'Add age band';
+    addAgeBtn.addEventListener('click', function() {
+      openAgeBandModal({ mode: 'create' });
+    });
+    addTd.appendChild(addAgeBtn);
+    addRow.appendChild(addTd);
+    tbody.appendChild(addRow);
+    refreshAddAgeBandRowColspan();
+  }
+
+  function renderAgeBandRatesInputs(ageBandId) {
+    var ratesWrap = document.getElementById('ageband-rates');
+    if (!ratesWrap) return;
+    ratesWrap.innerHTML = '';
+
+    if (!currentMatrix.plans.length) {
+      ratesWrap.innerHTML = '<div style="font-size:0.78rem;color:#6b7280;">No plans yet. Add a plan first.</div>';
+      return;
+    }
+
+    currentMatrix.plans.forEach(function(plan) {
+      var rates = ageBandId ? getCellRates(plan.id, ageBandId) : { M: '', F: '' };
+      var row = document.createElement('div');
+      row.className = 'ageband-rates-row';
+
+      var planLabel = document.createElement('div');
+      planLabel.className = 'ageband-rates-plan';
+      planLabel.textContent = plan.name || plan.code || '';
+
+      var mWrap = document.createElement('label');
+      mWrap.className = 'ageband-rate-item';
+      mWrap.innerHTML = '<span>M</span>';
+      var mInput = document.createElement('input');
+      mInput.type = 'number';
+      mInput.step = '0.01';
+      mInput.min = '0';
+      mInput.placeholder = '0';
+      mInput.setAttribute('data-plan-id', plan.id);
+      mInput.setAttribute('data-gender', 'M');
+      if (rates.M) mInput.value = rates.M;
+      mWrap.appendChild(mInput);
+
+      var fWrap = document.createElement('label');
+      fWrap.className = 'ageband-rate-item';
+      fWrap.innerHTML = '<span>F</span>';
+      var fInput = document.createElement('input');
+      fInput.type = 'number';
+      fInput.step = '0.01';
+      fInput.min = '0';
+      fInput.placeholder = '0';
+      fInput.setAttribute('data-plan-id', plan.id);
+      fInput.setAttribute('data-gender', 'F');
+      if (rates.F) fInput.value = rates.F;
+      fWrap.appendChild(fInput);
+
+      row.appendChild(planLabel);
+      row.appendChild(mWrap);
+      row.appendChild(fWrap);
+      ratesWrap.appendChild(row);
+    });
+  }
+
+  function openAgeBandModal(opts) {
+    var mode = opts && opts.mode ? opts.mode : 'create';
+    var ageBandId = opts && opts.ageBandId ? String(opts.ageBandId) : '';
+    var scope = getCurrentProductAndCompany();
+    if (!scope.productId || !scope.companyId) {
+      if (typeof toast === 'function') toast('Select a company first.', 'error');
+      return;
+    }
+
+    loadPricesForCompany(scope.productId, scope.companyId).then(function() {
+      var title = document.getElementById('ageband-modal-title');
+      var desc = document.getElementById('ageband-modal-desc');
+      var editIdEl = document.getElementById('ageband-edit-id');
+      var minEl = document.getElementById('ageband-min-age');
+      var maxEl = document.getElementById('ageband-max-age');
+
+      if (mode === 'edit' && ageBandId) {
+        var ageBand = findAgeBand(ageBandId);
+        if (!ageBand) {
+          if (typeof toast === 'function') toast('Age band not found.', 'error');
+          return;
+        }
+        if (title) title.textContent = 'Edit age band prices';
+        if (desc) desc.textContent = 'Update M/F rates for this age band across all plans.';
+        if (editIdEl) editIdEl.value = String(ageBand.id);
+        if (minEl) {
+          minEl.value = ageBand.min_age != null ? ageBand.min_age : '';
+          minEl.readOnly = true;
+        }
+        if (maxEl) {
+          maxEl.value = ageBand.max_age != null ? ageBand.max_age : '';
+          maxEl.readOnly = true;
+        }
+        renderAgeBandRatesInputs(ageBand.id);
+      } else {
+        if (title) title.textContent = 'Add age band';
+        if (desc) desc.textContent = 'Define the age range and set M/F rates for available plans.';
+        if (editIdEl) editIdEl.value = '';
+        if (minEl) {
+          minEl.value = '';
+          minEl.readOnly = false;
+        }
+        if (maxEl) {
+          maxEl.value = '';
+          maxEl.readOnly = false;
+        }
+        renderAgeBandRatesInputs('');
+      }
+      openModal('ageband');
+    });
+  }
+
+  var formAddAgeBand = document.getElementById('form-add-ageband');
+
+  function saveAgeBandRowRates(ageBandId) {
+    var scope = getCurrentProductAndCompany();
+    var fd = new FormData();
+    fd.append('product_id', scope.productId);
+    fd.append('company_id', scope.companyId);
+
+    document.querySelectorAll('#ageband-rates input[data-plan-id][data-gender]').forEach(function(inp) {
+      var planId = inp.getAttribute('data-plan-id');
+      var gender = inp.getAttribute('data-gender');
+      var key = 'rate_' + planId + '_' + ageBandId + '_' + gender;
+      fd.append(key, (inp.value || '').trim());
+    });
+
+    return fetch('/products/prices/save/', {
+      method: 'POST',
+      body: fd,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrfToken()
+      }
+    }).then(function(r) { return r.json(); });
+  }
+
+  if (formAddAgeBand) {
+    formAddAgeBand.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var scope = getCurrentProductAndCompany();
+      var editAgeBandId = document.getElementById('ageband-edit-id').value;
+      if (!scope.productId || !scope.companyId) {
+        if (typeof toast === 'function') toast('Select a company first.', 'error');
+        return;
+      }
+
+      var saveBtn = document.getElementById('ageband-save-btn');
+      if (saveBtn) saveBtn.disabled = true;
+
+      var onDone = function(message) {
+        loadPricesForCompany(scope.productId, scope.companyId).then(function() {
+          closeModal('modal-ageband');
+          if (typeof toast === 'function') toast(message);
+        });
+      };
+
+      if (editAgeBandId) {
+        saveAgeBandRowRates(editAgeBandId)
+          .then(function(data) {
+            if (!data.ok) {
+              if (typeof toast === 'function') toast(data.error || 'Could not save prices.', 'error');
+              return;
+            }
+            onDone('Prices updated.');
+          })
+          .catch(function() {
+            if (typeof toast === 'function') toast('Could not save prices.', 'error');
+          })
+          .finally(function() {
+            if (saveBtn) saveBtn.disabled = false;
+          });
+        return;
+      }
+
+      var payload = {
+        min_age: document.getElementById('ageband-min-age').value,
+        max_age: document.getElementById('ageband-max-age').value,
+        product_id: scope.productId,
+        company_id: scope.companyId
+      };
+
+      fetch('/products/age-bands/create/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken()
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok || !data.age_band) {
+          if (typeof toast === 'function') toast((data && data.error) || 'Could not add age band.', 'error');
+          return;
+        }
+        saveAgeBandRowRates(data.age_band.id)
+          .then(function(saveData) {
+            if (!saveData.ok) {
+              if (typeof toast === 'function') toast(saveData.error || 'Age band created but rates not saved.', 'error');
+              return;
+            }
+            onDone('Age band and prices saved.');
+          })
+          .catch(function() {
+            if (typeof toast === 'function') toast('Age band created but rates not saved.', 'error');
+          });
+      })
+      .catch(function() {
+        if (typeof toast === 'function') toast('Could not add age band.', 'error');
+      })
+      .finally(function() {
+        if (saveBtn) saveBtn.disabled = false;
+      });
+    });
+  }
+
+  var formAddPlan = document.getElementById('form-add-plan');
+  if (formAddPlan) {
+    formAddPlan.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var payload = {
+        code: document.getElementById('plan-code').value,
+        name: document.getElementById('plan-name').value,
+        product_id: document.getElementById('price-product-id').value,
+        company_id: document.getElementById('price-company-id').value
+      };
+      if (!payload.product_id || !payload.company_id) {
+        if (typeof toast === 'function') toast('Select a company first.', 'error');
+        return;
+      }
+      fetch('/products/plans/create/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken()
+        },
+        body: JSON.stringify(payload)
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok) {
+            if (typeof toast === 'function') toast(data.error || 'Could not add plan.', 'error');
+            return;
+          }
+          formAddPlan.reset();
+          closeModal('modal-plan');
+          loadPricesForCompany(payload.product_id, payload.company_id);
+          if (typeof toast === 'function') toast('Plan added. Click an age-band row to set prices.');
+        })
+        .catch(function() {
+          if (typeof toast === 'function') toast('Could not add plan.', 'error');
+        });
+    });
+  }
+
+  // Delete age band
+  function attachAgeBandDeleteListener(ageBandId) {
+    return function() {
+      var scope = getCurrentProductAndCompany();
+      if (!scope.productId || !scope.companyId) {
+        if (typeof toast === 'function') toast('Select a company first.', 'error');
+        return;
+      }
+      openDeleteConfirm('Delete age band', 'This will remove this age band for the selected product and company.', function() {
+        fetch('/products/age-bands/' + ageBandId + '/delete/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken()
+          },
+          body: JSON.stringify({ product_id: scope.productId, company_id: scope.companyId })
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.ok) {
+              loadPricesForCompany(scope.productId, scope.companyId);
+              if (typeof toast === 'function') toast('Age band deleted.');
+            } else {
+              if (typeof toast === 'function') toast(data.error || 'Could not delete age band.', 'error');
+            }
+          })
+          .catch(function() {
+            if (typeof toast === 'function') toast('Delete failed.', 'error');
+          });
+      });
+    };
+  }
+
+  // Delete plan
+  function attachPlanDeleteListener(planId) {
+    return function() {
+      var scope = getCurrentProductAndCompany();
+      if (!scope.productId || !scope.companyId) {
+        if (typeof toast === 'function') toast('Select a company first.', 'error');
+        return;
+      }
+      openDeleteConfirm('Delete plan', 'This will remove this plan for the selected product and company.', function() {
+        fetch('/products/plans/' + planId + '/delete/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken()
+          },
+          body: JSON.stringify({ product_id: scope.productId, company_id: scope.companyId })
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.ok) {
+              loadPricesForCompany(scope.productId, scope.companyId);
+              if (typeof toast === 'function') toast('Plan deleted.');
+            } else {
+              if (typeof toast === 'function') toast(data.error || 'Could not delete plan.', 'error');
+            }
+          })
+          .catch(function() {
+            if (typeof toast === 'function') toast('Delete failed.', 'error');
+          });
+      });
+    };
+  }
+
+  renderScopedMatrix();
+
+  window.openAgeBandModal = openAgeBandModal;
+})();
+</script>
+{% endblock %}

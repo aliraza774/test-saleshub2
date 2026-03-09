@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+
+/* ═══════════════════════════════════════════════════════
+   SalesHub — Design Tokens  ·  Blue × White Theme
+   Import this file first in any HTML page:
+     <link rel="stylesheet" href="theme.css" />
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+
+  /* ── Page backgrounds ── */
+  --bg-deep:        #eef2fb;   /* off-white page wash */
+  --bg-nav:         #1e3a8a;   /* deep blue sidebar */
+  --bg-card:        #ffffff;   /* white card surface */
+  --bg-card-dark:   #dce8ff;   /* soft blue tinted card */
+  --bg-input:       #f0f5ff;   /* very light blue input fill */
+  --bg-input-focus: #e6eeff;   /* slightly deeper on focus */
+
+  /* ── Brand blues ── */
+  --accent-blue:    #2563eb;   /* primary CTA — vivid blue */
+  --accent-blue-lt: #3b82f6;   /* hover / lighter blue */
+  --accent-blue-dk: #1d4ed8;   /* pressed / darker blue */
+  --accent-blue-glow: rgba(37,99,235,0.22);
+
+  /* ── Secondary accents ── */
+  --accent-purple:  #4f46e5;   /* indigo — "NEW" badge, gradients */
+  --accent-purple-lt: #6366f1;
+  --accent-teal:    #0284c7;   /* sky-blue highlight / eyebrow */
+  --accent-orange:  #ea580c;   /* warning / verify banners */
+
+  /* ── Text ── */
+  --text-primary:   #0f172a;   /* near-black on white */
+  --text-secondary: #334155;   /* slate gray */
+  --text-muted:     #94a3b8;   /* light muted labels */
+  --text-inverse:   #ffffff;   /* white text on blue bg */
+  --text-dark:      #000000;   /* black for headings (was blue) */
+
+  /* ── Borders ── */
+  --border:         rgba(37,99,235,0.15);
+  --border-focus:   rgba(37,99,235,0.55);
+  --border-subtle:  rgba(0,0,0,0.07);
+
+  /* ── Shadows ── */
+  --shadow-card:    0 8px 32px rgba(37,99,235,0.10), 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-card-lg: 0 24px 64px rgba(37,99,235,0.15), 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-btn:     0 6px 20px rgba(37,99,235,0.35);
+  --shadow-btn-hover: 0 10px 28px rgba(37,99,235,0.50);
+
+  /* ── Radii ── */
+  --radius-card:    20px;
+  --radius-input:   12px;
+  --radius-btn:     50px;
+  --radius-badge:   6px;
+
+  /* ── Motion ── */
+  --transition:     0.55s cubic-bezier(0.23, 1, 0.32, 1);
+  --transition-fast: 0.2s ease;
+
+  /* ── Overlay gradient (animated panel) ── */
+  --overlay-gradient: linear-gradient(145deg, var(--accent-blue) 0%, #1d4ed8 45%, var(--accent-purple) 100%);
+
+  /* ── Typography ── */
+  --font-display: 'Inter', 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body:    'Inter', 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* ── Layout ── */
+  --sidebar-w:    260px;
+}

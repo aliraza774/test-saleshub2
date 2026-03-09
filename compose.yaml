@@ -1,0 +1,24 @@
+name: saleshub
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: saleshub-postgres
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: saleshub
+      POSTGRES_USER: saleshub
+      POSTGRES_PASSWORD: saleshub
+    volumes:
+      - saleshub_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  saleshub_postgres_data:
+
